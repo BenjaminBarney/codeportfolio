@@ -1,0 +1,321 @@
+/*
+* Name: Startup
+* Arguments: bool debug (default: false) for Dev environment testing
+* Returns: nothing
+*
+* Description: This is the function that runs when FSP_SCNWAT_CHECKER.exe is first launched. It checks for updates and starts the FSP timer.
+*
+* Dev: Ben Barney
+* Date: 3/13/19
+* Latest Change: 8/9/19
+*/
+private void Startup(bool debug = false)
+{
+    if (!Directory.Exists(workingFolder + @"\Update"))
+    {
+	Directory.CreateDirectory(workingFolder + @"\Update");
+    }
+
+
+    //Check latest version from Update Server//
+    
+	WriteToFile("Checking remote updateDev version...");
+	if (checkUpdateServer(debug))
+	{
+	    if (checkVersions(debug))
+	    {
+		if (debug)
+		{
+			WriteToFile("New dev version found! Downloading...");
+			downloadUpdateFile("http://[-REDACTED-]:56374/updateDev.zip");
+		} else {
+			WriteToFile("New version found! Downloading...");
+			downloadUpdateFile("http://[-REDACTED-]:56374/update.zip");
+		}
+	    } else
+	    {
+		WriteToFile("Already up to date.");
+	    }
+	}
+    
+	WriteToFile("Service is started at " + DateTime.Now);
+	CheckForUpdateFile();
+	if (this.shutdown)
+	{
+		return;
+	}
+	BootEvent(); //removed in this example code
+//[...] Code Removed
+}
+
+/*
+* Name: CheckForUpdateFile
+* Arguments: none
+* Returns: nothing
+*
+* Description: Check for existing update.zip file. This function is separate from auto updater to allow updates to be distributed manually or through Ivanti if necessary.
+*
+* Dev: Ben Barney
+* Date: 3/13/19
+* Latest Change: 3/19/19
+*/
+private void CheckForUpdateFile()
+{
+    try
+    {
+	string filepath = AppDomain.CurrentDomain.BaseDirectory + "\\Update\\update.zip";
+	if (File.Exists(filepath))
+	{
+	    WriteToFile("Update found! Unzipping...");
+	    using(ZipFile archive = new ZipFile(filepath))
+	    {
+		archive.Password = "[-REDACTED-]";
+		archive.Encryption = EncryptionAlgorithm.PkzipWeak;
+		archive.StatusMessageTextWriter = Console.Out;
+
+		archive.ExtractAll(AppDomain.CurrentDomain.BaseDirectory + "\\Update\\", ExtractExistingFileAction.OverwriteSilently);
+	    }
+	    File.Delete(filepath);
+	    ApplyUpdate();
+	} else
+	{
+	    WriteToFile("No updates available. Proceeding...");
+	}
+    } catch(Exception ex)
+    {
+	WriteToFile("Error updating! Message: "+ex.Message);
+    }
+}
+
+/*
+* Name: ApplyUpdate
+* Arguments: none
+* Returns: nothing
+*
+* Description: Unzip update.zip file, start the standalone update executable and close FSP_SCRWAT_CHECKER so that this executable can be updated as well. Also, make sure FSP_SCNWAT isn't running so it can be updated.
+*
+* Dev: Ben Barney
+* Date: 3/13/19
+* Latest Change: 3/19/19
+*/
+private void ApplyUpdate()
+{
+    string filepathupdate = AppDomain.CurrentDomain.BaseDirectory + "\\Update\\Update.exe";
+    if (File.Exists(filepathupdate))
+    {
+	WriteToFile("New Update.exe found. Installing...");
+	File.Copy(filepathupdate, AppDomain.CurrentDomain.BaseDirectory + "\\Update.exe", true);
+	File.Delete(filepathupdate);
+    }
+
+    SecureString secPwd = new SecureString();
+    string pwd = "";
+
+    //Define shell process to execute Update.exe
+    ProcessStartInfo shellInfo = new ProcessStartInfo(@"c:\windows\system32\cmd.exe");
+    Process shellCMD = new Process();
+
+    shellInfo.CreateNoWindow = true;
+    shellInfo.ErrorDialog = false;
+    shellInfo.WorkingDirectory = workingFolder;
+    shellInfo.FileName = workingFolder + "Update.exe";
+    shellInfo.UserName = "[-REDACTED-]";
+    pwd = "[-REDACTED-]";
+    foreach (char iPwdChar in pwd)
+    {
+	secPwd.AppendChar(iPwdChar);
+    }
+    shellInfo.Password = secPwd;
+    shellInfo.RedirectStandardOutput = true;
+    shellInfo.RedirectStandardInput = true;
+    shellInfo.RedirectStandardError = true;
+    shellInfo.UseShellExecute = false;
+    shellInfo.WindowStyle = ProcessWindowStyle.Hidden;
+
+    shellCMD.StartInfo = shellInfo;
+
+    if (!(File.Exists(shellInfo.FileName)))
+    {
+	WriteToFile("Update.exe not found at " + shellInfo.FileName + " Timestamp: " + DateTime.Now);
+	return;
+    } else {
+	try
+	{
+	    WriteToFile("Handing off to Updater. Setting 'Shutdown' to true to close fsp_scnwat_checker.");
+	    shellCMD.Start();
+	}
+	catch (Exception ex)
+	{
+	    WriteToFile("[" + DateTime.Now + "] ERROR: " + ex.Message + " INFO: " + ex.StackTrace + " INNER: " + ex.InnerException);
+	}
+    }
+    try {
+	Process[] sysProcs = Process.GetProcesses();
+	foreach (Process iProc in sysProcs)
+	{
+	    if (iProc.ProcessName == "fsp_scnwat")
+	    {
+		WriteToFile("Killing fsp_scnwat.");
+		iProc.Kill();
+	    }
+	}
+    }
+    catch (Exception ex)
+    {
+	WriteToFile("[" + DateTime.Now + "] ERROR: " + ex.Message + " INFO: " + ex.StackTrace + " INNER: " + ex.InnerException);
+    }
+    this.shutdown = true;
+}
+
+/*
+* Name: checkUpdateServer
+* Arguments: bool debug (default: false) for Dev environment testing
+* Returns: nothing
+*
+* Description: Download text file describing latest FSP version available. Returns true if no errors occurred.
+* Todo: Query API on server both so we can track which machines are getting updated when, and so we can verify update files are available before trying to download them to prevent timeouts or 404 errors.
+*
+* Dev: Ben Barney
+* Date: 8/8/19
+* Latest Change: 8/9/19
+*/
+public bool checkUpdateServer(bool debug = false)
+{
+    bool results = false;
+
+    if (File.Exists(workingFolder + @"\Update\FspLatestVersion.txt"))
+    {
+	File.Delete(workingFolder + @"\Update\FspLatestVersion.txt");
+    }
+    if (File.Exists(workingFolder + @"\Update\FspLatestVersionDebug.txt"))
+    {
+	File.Delete(workingFolder + @"\Update\FspLatestVersionDebug.txt");
+    }
+    try
+    {
+	using (var client = new WebClient())
+	{
+	    if (debug)
+	    {
+		client.DownloadFile("http://[-REDACTED-]:56374/FspLatestVersion.txt", workingFolder + @"Update\FspLatestVersion.txt");
+		results = true;
+	    } else
+	    {
+		client.DownloadFile("http://[-REDACTED-]:56374/FspLatestVersionDebug.txt", workingFolder + @"Update\FspLatestVersionDebug.txt");
+		results = true;
+	    }
+	}
+    } catch(Exception ex)
+    {
+	WriteToFile("Error! Message: " + ex.Message + "\n\nTrace: " + ex.StackTrace);
+	results = false;
+    }
+    return results;
+}
+
+/*
+* Name: downloadUpdateFile
+* Arguments: string address
+* Returns: bool
+*
+* Description: Download update file from server. Returns true on success.
+*
+* Dev: Ben Barney
+* Date: 8/8/19
+* Latest Change: 8/9/19
+*/
+public bool downloadUpdateFile(string address)
+{
+    bool results = false;
+    try {
+	cleanOutUpdateFiles();
+	using (var client = new WebClient())
+	{
+	    client.DownloadFile(address, workingFolder + @"Update\update.zip");
+	    results = true;
+	}
+    }
+    catch (Exception ex)
+    {
+	WriteToFile("Error! Message: " + ex.Message + "\n\nTrace: " + ex.StackTrace);
+	results = false;
+    }
+
+    return results;
+}
+
+/*
+* Name: checkVersions
+* Arguments: bool debug (default: false) for Dev environment testing
+* Returns: bool
+*
+* Description: Compare local version of FSP and latest version available. Return true if an update is required.
+*
+* Dev: Ben Barney
+* Date: 8/8/19
+* Latest Change: 8/9/19
+*/
+public bool checkVersions(bool dev = false)
+{
+    bool results = false;
+    if (File.Exists(workingFolder + "version.txt") && ((File.Exists(workingFolder + @"Update\FspLatestVersionDebug.txt") && dev) || File.Exists(workingFolder + @"Update\FspLatestVersion.txt")))
+    {
+	string localVersion = File.ReadAllText(workingFolder + "version.txt").Trim();
+	string[] localVersArr = localVersion.Split('.');
+	string remoteVersion = "";
+	if (dev)
+	{
+	    remoteVersion = File.ReadAllText(workingFolder + @"Update\FspLatestVersionDebug.txt").Trim();
+	}
+	else
+	{
+	    remoteVersion = File.ReadAllText(workingFolder + @"Update\FspLatestVersion.txt").Trim();
+	}
+	string[] remoteVersArr = remoteVersion.Split('.');
+
+	for (int i = 0; i < 3; i++)
+	{
+	    WriteToFile("Remote version found:" + remoteVersArr[i] + ", Local version found: " + localVersArr[i]);
+	    if (Convert.ToInt32(remoteVersArr[i]) > Convert.ToInt32(localVersArr[i]))
+	    {
+		WriteToFile("Remote version larger!");
+		results = true;
+	    }
+	    else
+	    {
+		WriteToFile("Remote version not larger.");
+	    }
+	}
+    } else
+    {
+	WriteToFile("Update version files not all found.");
+    }
+    return results;
+}
+
+/*
+* Name: cleanOutUpdateFiles
+* Arguments: none
+* Returns: none
+*
+* Description: Remove update files once update is complete.
+* Dev: Ben Barney
+* Date: 8/8/19
+* Latest Change: 8/9/19
+*/
+public void cleanOutUpdateFiles()
+{
+    try
+    {
+	WriteToFile("Removing update files...");
+	System.IO.DirectoryInfo di = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory + "\\Update\\");
+	foreach (FileInfo Fi in di.GetFiles())
+	{
+	    Fi.Delete();
+	}
+    }
+    catch (Exception ex)
+    {
+	WriteToFile("Error! Message: " + ex.Message + "\n\nTrace: " + ex.StackTrace);
+    }
+}

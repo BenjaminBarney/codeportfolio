@@ -1,0 +1,222 @@
+Javascript exercizes:
+
+Given array of mixed types, remove all strings from array, then return new array.
+
+function filterList(l){
+   var filtered = l.filter(function(value, index, arr){
+      return !(typeof(value) == 'string');
+   });
+   return filtered;
+}
+
+------------------------------
+remove WUBS from song to get original lyrics. Do not have leading or trailing
+spaces. Do not have more than one space between words.
+
+songDecoder("WUBWEWUBAREWUBWUBTHEWUBCHAMPIONSWUBMYWUBFRIENDWUB")
+  // =>  WE ARE THE CHAMPIONS MY FRIEND
+
+function songDecoder(song){
+  // Match one or more WUBs and replace with one space, then trim proceeding or trailing spaces.
+  return song.replace(/(WUB){1,}/gm, " ").trim();
+  // Or /(WUB)+/gm
+}
+
+------------------------------
+Write a function, persistence, that takes in a positive parameter num and returns its multiplicative persistence, which is the number of times you must multiply the digits in num until you reach a single digit.
+
+For example:
+
+ persistence(39) === 3 // because 3*9 = 27, 2*7 = 14, 1*4=4
+                       // and 4 has only one digit
+
+ persistence(999) === 4 // because 9*9*9 = 729, 7*2*9 = 126,
+                        // 1*2*6 = 12, and finally 1*2 = 2
+
+ persistence(4) === 0 // because 4 is already a one-digit number
+
+
+function persistence(num) {
+   //Start persistence counter
+   var persistence = 0;
+   //Stop when less than 2 digits
+   while(num > 9){
+     //Start a muliplyer scratchpad
+     var runningTotal = 1;
+     //make an array of ints from an int
+     var digitArr = num.toString().split("").map(function(value, index, arr){
+        return parseInt(value);
+     });
+     //multiple array together with scratchpad
+     digitArr.forEach(function(value, index, arr){
+        runningTotal*=value;
+     });
+     //Increment persistence
+     persistence++;
+     //restart with new int
+     num = runningTotal;
+   }
+   return persistence;
+}
+//Or, use array.reduce: digitArr.reduce(function(x,y){return x*y}); keeps internal counter
+//automatically and returns all values multiplied together.
+
+------------------------------
+
+You get an array of numbers, return the sum of all of the positives ones.
+
+Example [1,-4,7,12] => 1 + 7 + 12 = 20
+
+Note: if there is nothing to sum, the sum is default to 0.
+
+function positiveSum(arr) {
+  return arr.reduce(function(numa, numb){
+     //only add if above 0
+     if(numb>0){
+        return numa+numb;
+     } else {
+        return numa;
+     }
+   }, 0); //Make sure we have a starting value of 0
+}
+
+------------------------------
+
+Implement a function that adds two numbers together and returns their sum in binary. The conversion can be done before, or after the addition.
+
+The binary number returned should be a string.
+
+function addBinary(a,b) {
+//toString accepts a number as the counting base; 2 for binary, 16 for hex.
+   return (a+b).toString(2);
+}
+
+------------------------------
+
+In a factory a printer prints labels for boxes. For one kind of boxes the printer has to use colors which, for the sake of simplicity, are named with letters from a to m.
+
+The colors used by the printer are recorded in a control string. For example a "good" control string would be aaabbbbhaijjjm meaning that the printer used three times color a, four times color b, one time color h then one time color a...
+
+Sometimes there are problems: lack of colors, technical malfunction and a "bad" control string is produced e.g. aaaxbbbbyyhwawiwjjjwwm with letters not from a to m.
+
+You have to write a function printer_error which given a string will output the error rate of the printer as a string representing a rational whose numerator is the number of errors and the denominator the length of the control string. Don't reduce this fraction to a simpler expression.
+
+The string has a length greater or equal to one and contains only letters from ato z.
+
+#Examples:
+
+s="aaabbbbhaijjjm"
+error_printer(s) => "0/14"
+
+s="aaaxbbbbyyhwawiwjjjwwm"
+error_printer(s) => "8/22"
+
+function printerError(s) {
+    var denominator = s.length.toString();
+    var numerator = (s.match(/[^a-m]/g) || []).length.toString();
+    return numerator+"/"+denominator;
+}
+
+------------------------------
+
+Write a function that takes a string of braces, and determines if the order of the braces is valid. It should return true if the string is valid, and false if it's invalid.
+
+This Kata is similar to the Valid Parentheses Kata, but introduces new characters: brackets [], and curly braces {}. Thanks to @arnedag for the idea!
+
+All input strings will be nonempty, and will only consist of parentheses, brackets and curly braces: ()[]{}.
+
+What is considered Valid?
+A string of braces is considered valid if all braces are matched with the correct brace.
+
+Examples
+"(){}[]"   =>  True
+"([{}])"   =>  True
+"(}"       =>  False
+"[(])"     =>  False
+"[({})](]" =>  False
+
+function validBraces(braces){
+  //If input isn't as expected, just return false
+  var results = false;
+  //create an array to hold list of previous open braces
+  var countingArr = [];
+  //get an array of brace characters
+  var braceArr = braces.split('');
+  //define constants to compare to
+  var opens = ['(', '[', '{'];
+  var closes = [')', ']', '}'];
+  for(i=0; i<braces.length; i++){
+    if(opens.includes(braceArr[i])){
+      countingArr.push(braceArr[i]);
+    } else if(countingArr.length>0) {
+      var lastOpen = countingArr.pop();
+      if(opens.indexOf(lastOpen) == closes.indexOf(braceArr[i])){
+        results = true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  return results;
+}
+
+//Other examples:
+function validBraces(braces){
+  var matches = { '(':')', '{':'}', '[':']' };
+  var stack = [];
+  var currentChar;
+
+  for (var i=0; i<braces.length; i++) {
+    currentChar = braces[i];
+
+    if (matches[currentChar]) { // opening braces
+      stack.push(currentChar);
+    } else { // closing braces
+      if (currentChar !== matches[stack.pop()]) {
+        return false;
+      }
+    }
+  }
+
+  return stack.length === 0; // any unclosed braces left?
+}
+
+function validBraces(braces){
+ while(/\(\)|\[\]|\{\}/g.test(braces)){braces = braces.replace(/\(\)|\[\]|\{\}/g,"")}
+ return !braces.length;
+}
+
+------------------------------
+
+A pangram is a sentence that contains every single letter of the alphabet at least once. For example, the sentence "The quick brown fox jumps over the lazy dog" is a pangram, because it uses the letters A-Z at least once (case is irrelevant).
+
+Given a string, detect whether or not it is a pangram. Return True if it is, False if not. Ignore numbers and punctuation.
+
+function isPangram(string){
+  var alphabet = "abcdefghijklmnopqrstuvwxyz";
+  var strArr = string.toLowerCase().split('');
+  var compareArr = alphabet.split('');
+  for(i=0; i<compareArr.length; i++){
+    if(!(strArr.includes(compareArr[i]))){
+      return false;
+    }
+  }
+  return true;
+}
+
+OR
+
+ function isPangram(string){
+   string = string.toLowerCase();
+   return "abcdefghijklmnopqrstuvwxyz".split("").every(function(x){
+     return string.indexOf(x) !== -1;
+   });
+}
+
+OR
+
+function isPangram(string){
+  return (string.match(/([a-z])(?!.*\1)/ig) || []).length === 26;
+}
