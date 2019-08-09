@@ -262,9 +262,8 @@ function queueTime(customers, n) {
       tillArr.push(customers.shift());
     }
     timer++;
-    tillArr.map(function(value, index, arr){
+    tillArr = tillArr.map(function(value, index, arr){
         var newval = value-1;
-        arr[index] = newval;
         return newval;
      });
      for(var i=0; i<tillArr.length; i++){
